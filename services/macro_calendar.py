@@ -1,79 +1,84 @@
-import httpx
 from datetime import date, timedelta
 
-# Central bank current rates and next meeting dates (updated manually or via news)
 CENTRAL_BANKS = [
     {
-        "bank": "Federal Reserve (Fed)",
+        "bank": "Federal Reserve",
         "currency": "USD",
         "current_rate": 4.25,
         "next_meeting": "2026-05-07",
         "last_decision": "Hold",
         "implied_next": "Hold / -25bp",
-        "notes": "Fed in wait-and-see mode amid tariff uncertainty",
+        "notes": "Wait-and-see amid tariff uncertainty",
     },
     {
-        "bank": "Bank of England (BoE)",
+        "bank": "Bank of England",
         "currency": "GBP",
         "current_rate": 4.50,
         "next_meeting": "2026-05-08",
         "last_decision": "-25bp",
-        "implied_next": "Hold / -25bp",
-        "notes": "BoE cautious on inflation persistence vs weak growth",
+        "implied_next": "-25bp",
+        "notes": "Cutting cycle continues, weak growth",
     },
     {
-        "bank": "European Central Bank (ECB)",
+        "bank": "European Central Bank",
         "currency": "EUR",
-        "current_rate": 2.50,
-        "next_meeting": "2026-04-17",
+        "current_rate": 2.25,
+        "next_meeting": "2026-06-05",
         "last_decision": "-25bp",
         "implied_next": "-25bp",
-        "notes": "ECB cutting cycle continuing, inflation near target",
+        "notes": "Inflation near target, cutting continues",
     },
     {
-        "bank": "Bank of Japan (BoJ)",
+        "bank": "Bank of Japan",
         "currency": "JPY",
         "current_rate": 0.50,
-        "next_meeting": "2026-04-30",
-        "last_decision": "+25bp",
+        "next_meeting": "2026-06-17",
+        "last_decision": "Hold",
         "implied_next": "Hold",
-        "notes": "BoJ hiking cautiously, watching yen and wage data",
+        "notes": "Watching yen and wage data",
     },
     {
-        "bank": "People's Bank of China (PBoC)",
+        "bank": "PBoC",
         "currency": "CNY",
         "current_rate": 3.10,
-        "next_meeting": "2026-04-20",
+        "next_meeting": "2026-05-20",
         "last_decision": "Hold",
         "implied_next": "-10bp",
-        "notes": "PBoC under pressure to ease amid trade war impact",
+        "notes": "Easing pressure from trade war",
     },
 ]
 
-# Key macro events — updated with upcoming scheduled releases
+# prev = prior release value, consensus = market estimate
 MACRO_EVENTS = [
-    {"date": "2026-04-08", "event": "US NFIB Small Business Optimism", "importance": "medium", "region": "US"},
-    {"date": "2026-04-09", "event": "US CPI (Mar)", "importance": "high", "region": "US"},
-    {"date": "2026-04-09", "event": "FOMC Minutes", "importance": "high", "region": "US"},
-    {"date": "2026-04-10", "event": "US PPI (Mar)", "importance": "high", "region": "US"},
-    {"date": "2026-04-10", "event": "UK GDP (Feb)", "importance": "high", "region": "UK"},
-    {"date": "2026-04-11", "event": "US Michigan Consumer Sentiment", "importance": "medium", "region": "US"},
-    {"date": "2026-04-14", "event": "US Retail Sales (Mar)", "importance": "high", "region": "US"},
-    {"date": "2026-04-15", "event": "China GDP Q1 2026", "importance": "high", "region": "CN"},
-    {"date": "2026-04-16", "event": "US Industrial Production", "importance": "medium", "region": "US"},
-    {"date": "2026-04-17", "event": "ECB Rate Decision", "importance": "high", "region": "EU"},
-    {"date": "2026-04-23", "event": "US PMI Flash (Apr)", "importance": "medium", "region": "US"},
-    {"date": "2026-04-23", "event": "UK PMI Flash (Apr)", "importance": "medium", "region": "UK"},
-    {"date": "2026-04-24", "event": "US Durable Goods Orders", "importance": "medium", "region": "US"},
-    {"date": "2026-04-30", "event": "US GDP Q1 Advance", "importance": "high", "region": "US"},
-    {"date": "2026-04-30", "event": "BoJ Rate Decision", "importance": "high", "region": "JP"},
-    {"date": "2026-05-02", "event": "US Non-Farm Payrolls (Apr)", "importance": "high", "region": "US"},
-    {"date": "2026-05-07", "event": "Fed Rate Decision", "importance": "high", "region": "US"},
-    {"date": "2026-05-08", "event": "BoE Rate Decision", "importance": "high", "region": "UK"},
+    # ── May 2026 ──
+    {"date": "2026-05-05", "event": "ISM Services PMI (Apr)",        "importance": "high",   "region": "US", "prev": "50.8", "consensus": "51.0", "unit": ""},
+    {"date": "2026-05-07", "event": "Fed Rate Decision",              "importance": "high",   "region": "US", "prev": "4.25%", "consensus": "Hold", "unit": ""},
+    {"date": "2026-05-07", "event": "Fed Press Conference",           "importance": "high",   "region": "US", "prev": "", "consensus": "", "unit": ""},
+    {"date": "2026-05-08", "event": "BoE Rate Decision",              "importance": "high",   "region": "UK", "prev": "4.50%", "consensus": "-25bp", "unit": ""},
+    {"date": "2026-05-09", "event": "CPI (Apr)",                      "importance": "high",   "region": "US", "prev": "2.4%", "consensus": "2.3%", "unit": "YoY"},
+    {"date": "2026-05-12", "event": "PPI (Apr)",                      "importance": "high",   "region": "US", "prev": "2.7%", "consensus": "2.5%", "unit": "YoY"},
+    {"date": "2026-05-13", "event": "UK GDP (Mar)",                   "importance": "high",   "region": "UK", "prev": "0.5%", "consensus": "0.1%", "unit": "MoM"},
+    {"date": "2026-05-14", "event": "Retail Sales (Apr)",             "importance": "high",   "region": "US", "prev": "-0.1%", "consensus": "0.2%", "unit": "MoM"},
+    {"date": "2026-05-15", "event": "Michigan Consumer Sentiment",    "importance": "medium", "region": "US", "prev": "52.2", "consensus": "53.0", "unit": ""},
+    {"date": "2026-05-15", "event": "Industrial Production (Apr)",    "importance": "medium", "region": "US", "prev": "-0.3%", "consensus": "0.1%", "unit": "MoM"},
+    {"date": "2026-05-21", "event": "PMI Flash (May)",                "importance": "medium", "region": "US", "prev": "50.8", "consensus": "51.0", "unit": ""},
+    {"date": "2026-05-21", "event": "PMI Flash (May)",                "importance": "medium", "region": "EU", "prev": "50.4", "consensus": "50.5", "unit": ""},
+    {"date": "2026-05-22", "event": "FOMC Minutes",                   "importance": "high",   "region": "US", "prev": "", "consensus": "", "unit": ""},
+    {"date": "2026-05-27", "event": "GDP Q1 Second Estimate",         "importance": "high",   "region": "US", "prev": "-0.3%", "consensus": "-0.2%", "unit": "QoQ"},
+    {"date": "2026-05-29", "event": "PCE Inflation (Apr)",            "importance": "high",   "region": "US", "prev": "2.6%", "consensus": "2.5%", "unit": "YoY"},
+    {"date": "2026-05-30", "event": "Core PCE (Apr)",                 "importance": "high",   "region": "US", "prev": "2.8%", "consensus": "2.6%", "unit": "YoY"},
+    # ── June 2026 ──
+    {"date": "2026-06-03", "event": "ISM Manufacturing PMI (May)",   "importance": "medium", "region": "US", "prev": "48.7", "consensus": "49.5", "unit": ""},
+    {"date": "2026-06-05", "event": "Non-Farm Payrolls (May)",        "importance": "high",   "region": "US", "prev": "177K", "consensus": "150K", "unit": ""},
+    {"date": "2026-06-05", "event": "Unemployment Rate (May)",        "importance": "high",   "region": "US", "prev": "4.2%", "consensus": "4.3%", "unit": ""},
+    {"date": "2026-06-05", "event": "ECB Rate Decision",              "importance": "high",   "region": "EU", "prev": "2.25%", "consensus": "-25bp", "unit": ""},
+    {"date": "2026-06-11", "event": "CPI (May)",                      "importance": "high",   "region": "US", "prev": "2.3%", "consensus": "2.2%", "unit": "YoY"},
+    {"date": "2026-06-18", "event": "Fed Rate Decision",              "importance": "high",   "region": "US", "prev": "4.25%", "consensus": "Hold", "unit": ""},
+    {"date": "2026-06-26", "event": "PCE Inflation (May)",            "importance": "high",   "region": "US", "prev": "2.5%", "consensus": "2.4%", "unit": "YoY"},
 ]
 
 
-def get_upcoming_events(days: int = 14) -> list[dict]:
+def get_upcoming_events(days: int = 30) -> list[dict]:
     today = date.today()
     cutoff = today + timedelta(days=days)
     upcoming = []

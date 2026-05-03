@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
-from routers import assets, report, risk, ai, watchlist
+from routers import assets, report, risk, ai, watchlist, calendar
 from cache import cache
 from services.report_generator import generate_report
 from services.risk_generator import generate_risk_report
@@ -59,6 +59,7 @@ app.include_router(report.router, prefix="/report", tags=["report"])
 app.include_router(risk.router, prefix="/risk", tags=["risk"])
 app.include_router(ai.router, prefix="/ai", tags=["ai"])
 app.include_router(watchlist.router, prefix="/watchlist", tags=["watchlist"])
+app.include_router(calendar.router, prefix="/calendar", tags=["calendar"])
 
 
 @app.get("/health")
