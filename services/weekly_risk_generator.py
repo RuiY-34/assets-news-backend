@@ -16,7 +16,10 @@ def _normalize_points(points: list) -> list[str]:
         if isinstance(p, str):
             result.append(p)
         elif isinstance(p, dict):
-            result.append(next(iter(p.values()), ""))
+            val = next(iter(p.values()), "")
+            while isinstance(val, dict):
+                val = next(iter(val.values()), "")
+            result.append(str(val) if val is not None else "")
     return result
 
 
@@ -24,9 +27,15 @@ def _ask_section(prompt: str) -> dict:
     try:
         result = json.loads(_ask(prompt))
         if isinstance(result, dict):
+            summary = result.get("summary", "")
+            if not isinstance(summary, str):
+                summary = str(summary) if summary is not None else ""
+            points_raw = result.get("points", [])
+            if isinstance(points_raw, dict):
+                points_raw = list(points_raw.values())
             return {
-                "summary": result.get("summary", ""),
-                "points": _normalize_points(result.get("points", [])),
+                "summary": summary,
+                "points": _normalize_points(points_raw),
             }
     except Exception as e:
         print(f"[weekly_risk_generator] section error: {e}")
