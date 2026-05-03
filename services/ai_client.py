@@ -8,7 +8,7 @@ import json
 from groq import Groq
 from json_repair import repair_json
 
-MODEL = "llama-3.3-70b-versatile"  # better than llama3.2, free on Groq
+MODEL = "llama-3.1-8b-instant"  # higher free tier limits (500K+ TPD vs 100K)
 
 _client: Groq | None = None
 
