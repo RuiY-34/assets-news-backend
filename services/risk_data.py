@@ -22,9 +22,20 @@ RISK_TICKERS = {
 }
 
 
-def get_risk_indicators() -> dict:
+PERIOD_TO_YF = {
+    "1d": "5d",
+    "1w": "5d",
+    "1m": "1mo",
+    "3m": "3mo",
+    "6m": "6mo",
+    "1y": "1y",
+}
+
+
+def get_risk_indicators(period: str = "1d") -> dict:
+    yf_period = PERIOD_TO_YF.get(period, "5d")
     symbols = list(RISK_TICKERS.keys())
-    data = yf.download(symbols, period="5d", auto_adjust=True, progress=False, threads=True)
+    data = yf.download(symbols, period=yf_period, auto_adjust=True, progress=False, threads=True)
     closes = data["Close"] if "Close" in data else data
 
     results = {}
@@ -33,11 +44,11 @@ def get_risk_indicators() -> dict:
             series = closes[symbol].dropna()
             if len(series) < 2:
                 continue
-            curr = float(series.iloc[-1])
-            prev = float(series.iloc[-2])
-            week_ago = float(series.iloc[0])
-            change_1d  = (curr - prev) / prev * 100
-            change_5d  = (curr - week_ago) / week_ago * 100
+            curr       = float(series.iloc[-1])
+            prev_1d    = float(series.iloc[-2])
+            period_start = float(series.iloc[0])
+            change_1d  = (curr - prev_1d) / prev_1d * 100
+            change_5d  = (curr - period_start) / period_start * 100
             results[symbol] = {
                 "symbol": symbol,
                 "name": name,

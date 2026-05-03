@@ -33,11 +33,17 @@ def _ask_section(prompt: str) -> dict:
     return {"summary": "", "points": []}
 
 
-def _format_indicators(indicators: dict) -> str:
+PERIOD_CHANGE_LABEL = {
+    "1d": "1d", "1w": "5d", "1m": "1m", "3m": "3m", "6m": "6m", "1y": "1y",
+}
+
+
+def _format_indicators(indicators: dict, period: str = "1d") -> str:
+    chg_label = PERIOD_CHANGE_LABEL.get(period, "period")
     lines = []
     for v in indicators.values():
         lines.append(
-            f"- {v['name']} ({v['symbol']}): {v['price']} | 1d: {v['change_1d']:+.2f}% | 5d: {v['change_5d']:+.2f}%"
+            f"- {v['name']} ({v['symbol']}): {v['price']} | 1d: {v['change_1d']:+.2f}% | {chg_label}: {v['change_5d']:+.2f}%"
         )
     return "\n".join(lines) or "No data."
 
@@ -65,11 +71,11 @@ def generate_risk_report(period: str = "1d") -> dict:
     period_label  = PERIOD_LABELS.get(period, "today")
     horizon_label = PERIOD_HORIZONS.get(period, "next 1-2 days")
 
-    indicators = get_risk_indicators()
+    indicators = get_risk_indicators(period=period)
     news = get_risk_news()
     today = date.today().strftime("%B %d, %Y")
 
-    ind_text = _format_indicators(indicators)
+    ind_text = _format_indicators(indicators, period=period)
     headlines = "\n".join(f"- {n['title']}" for n in news[:8]) or "No headlines."
 
     vix = indicators.get("^VIX", {})
