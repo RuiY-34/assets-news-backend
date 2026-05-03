@@ -96,6 +96,14 @@ def generate_risk_report(period: str = "1d") -> dict:
         risk_score = 5
         risk_justification = ""
 
+    # Market risk section
+    market_risk_section = _ask_section(
+        f"Today is {today}. Period: {period_label}. Analyse equity market risk based on S&P 500 performance and VIX level "
+        f"and give a JSON with 'summary' (2 sentences on equity market risk and drawdown potential for the {horizon_label}) "
+        f"and 'points' (3 bullet strings on: market momentum, downside risk/drawdown potential, and correlation risks).\n\n"
+        f"Indicators:\n{ind_text}"
+    )
+
     # Volatility section
     vol_section = _ask_section(
         f"Today is {today}. Period: {period_label}. Analyse this volatility data (VIX={vix_level}, 1d change={vix_1d:+.2f}%) "
@@ -159,6 +167,7 @@ def generate_risk_report(period: str = "1d") -> dict:
     return {
         "risk_score": risk_score,
         "risk_justification": risk_justification,
+        "market_risk": market_risk_section,
         "volatility": vol_section,
         "credit_risk": credit_section,
         "liquidity": liquidity_section,

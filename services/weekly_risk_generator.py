@@ -70,6 +70,13 @@ def generate_weekly_risk_report() -> dict:
         risk_score = 5
         risk_justification = ""
 
+    market_risk_section = _ask_section(
+        f"Week of {week_str}. Analyse equity market risk based on this week's S&P 500 performance and VIX moves "
+        f"and give a JSON with 'summary' (2 sentences on equity market risk and drawdown potential heading into next week) "
+        f"and 'points' (3 bullet strings on: weekly market momentum, downside risk, and correlation risks).\n\n"
+        f"Indicators:\n{ind_text}"
+    )
+
     vol_section = _ask_section(
         f"Week of {week_str}. Analyse this week's volatility (VIX={vix_level}, 5d change={vix_5d:+.2f}%) "
         f"and give a JSON with 'summary' (2 sentences on this week's vol regime and what it means heading into next week) "
@@ -128,6 +135,7 @@ def generate_weekly_risk_report() -> dict:
     return {
         "risk_score": risk_score,
         "risk_justification": risk_justification,
+        "market_risk": market_risk_section,
         "volatility": vol_section,
         "credit_risk": credit_section,
         "liquidity": liquidity_section,
