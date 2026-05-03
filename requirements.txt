@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+yfinance
+python-dotenv
+httpx
+json-repair
+apscheduler
+groq
+numpy
+pandas
+pydantic
+requests
+beautifulsoup4
