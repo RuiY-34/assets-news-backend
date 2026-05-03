@@ -57,13 +57,16 @@ def get_weekly_risk():
 
 
 @router.get("/fear-greed")
-def get_fear_greed():
-    cached = cache.get("fear_greed")
+def get_fear_greed(period: str = Query("1d")):
+    if period not in VALID_PERIODS:
+        period = "1d"
+    cache_key = f"fear_greed_{period}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     try:
-        result = calculate_fear_greed()
-        cache.set("fear_greed", result)
+        result = calculate_fear_greed(period=period)
+        cache.set(cache_key, result)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
