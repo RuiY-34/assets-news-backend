@@ -73,13 +73,16 @@ def get_fear_greed(period: str = Query("1d")):
 
 
 @router.get("/funding-stress")
-def get_funding_stress():
-    cached = cache.get("funding_stress")
+def get_funding_stress(period: str = Query("1d")):
+    if period not in VALID_PERIODS:
+        period = "1d"
+    cache_key = f"funding_stress_{period}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     try:
-        result = calculate_funding_stress()
-        cache.set("funding_stress", result)
+        result = calculate_funding_stress(period=period)
+        cache.set(cache_key, result)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
