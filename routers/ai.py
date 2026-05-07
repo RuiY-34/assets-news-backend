@@ -217,6 +217,7 @@ def _fetch_ideas(prompt_content: str) -> list:
 
 def _load_history() -> list:
     try:
+        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
         with open(HISTORY_FILE, "r") as f:
             return json.load(f)
     except Exception:
@@ -225,6 +226,7 @@ def _load_history() -> list:
 
 def _save_history(ideas: list):
     try:
+        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
         history = _load_history()
         history = ideas + history  # newest first
         history = history[:30]    # keep last 30
