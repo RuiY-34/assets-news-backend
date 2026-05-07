@@ -240,6 +240,18 @@ def _save_history(ideas: list):
         pass
 
 
+def _safe_last_close(ticker: str, **kwargs) -> float | None:
+    """Download yfinance data and safely extract the last close price."""
+    try:
+        data = yf.download(ticker, auto_adjust=True, progress=False, **kwargs)
+        closes = data["Close"].squeeze().dropna()  # squeeze fixes MultiIndex DataFrame
+        if len(closes) < 1:
+            return None
+        return float(closes.iloc[-1])
+    except Exception:
+        return None
+
+
 def _get_entry_prices(assets: list[str]) -> dict[str, float]:
     """Fetch current prices as entry prices for newly saved ideas."""
     prices = {}
@@ -247,13 +259,9 @@ def _get_entry_prices(assets: list[str]) -> dict[str, float]:
         ticker = resolve_ticker(name)
         if not ticker:
             continue
-        try:
-            data = yf.download(ticker, period="1d", auto_adjust=True, progress=False)
-            closes = data["Close"].dropna()
-            if len(closes) >= 1:
-                prices[name] = round(float(closes.iloc[-1]), 4)
-        except Exception:
-            pass
+        price = _safe_last_close(ticker, period="1d")
+        if price is not None:
+            prices[name] = round(price, 4)
     return prices
 
 
@@ -271,13 +279,12 @@ def _calculate_pnl(idea: dict) -> dict:
             continue
         try:
             data = yf.download(ticker, start=entry_date, auto_adjust=True, progress=False)
-            closes = data["Close"].dropna()
+            closes = data["Close"].squeeze().dropna()  # squeeze fixes MultiIndex DataFrame
             if len(closes) < 1:
                 continue
             current_price = float(closes.iloc[-1])
             pct_return = (current_price - entry_price) / entry_price * 100
             dollar_pnl = (pct_return / 100) * POSITION_SIZE
-            days_held = len(closes)
             results.append({
                 "name": name,
                 "ticker": ticker,
@@ -285,7 +292,7 @@ def _calculate_pnl(idea: dict) -> dict:
                 "current_price": round(current_price, 4),
                 "pct_return": round(pct_return, 2),
                 "dollar_pnl": round(dollar_pnl, 2),
-                "days_held": days_held,
+                "days_held": len(closes),
                 "position_size": POSITION_SIZE,
             })
         except Exception:
@@ -341,13 +348,17 @@ def get_trade_ideas():
         short_ideas = _fetch_ideas(short_prompt)
         long_ideas = _fetch_ideas(long_prompt)
 
-        # Tag with entry date and fetch entry prices for future backtesting
-        all_new = short_ideas + long_ideas
-        for idea in all_new:
+        # Tag with entry date, type, and fetch entry prices for future backtesting
+        for idea in short_ideas:
             idea["entry_date"] = today_iso
+            idea["idea_type"] = "short_term"
+            idea["entry_prices"] = _get_entry_prices(idea.get("assets", []))
+        for idea in long_ideas:
+            idea["entry_date"] = today_iso
+            idea["idea_type"] = "long_term"
             idea["entry_prices"] = _get_entry_prices(idea.get("assets", []))
 
-        _save_history(all_new)
+        _save_history(short_ideas + long_ideas)
 
         result = {
             "regime": regime,
@@ -406,11 +417,23 @@ def get_weekly_trade_ideas():
         short_ideas = _fetch_ideas(short_prompt)
         long_ideas = _fetch_ideas(long_prompt)
 
+        today_iso = date.today().isoformat()
+        for idea in short_ideas:
+            idea["entry_date"] = today_iso
+            idea["idea_type"] = "short_term"
+            idea["entry_prices"] = _get_entry_prices(idea.get("assets", []))
+        for idea in long_ideas:
+            idea["entry_date"] = today_iso
+            idea["idea_type"] = "long_term"
+            idea["entry_prices"] = _get_entry_prices(idea.get("assets", []))
+
+        _save_history(short_ideas + long_ideas)
+
         result = {
             "regime": regime,
             "short_term": short_ideas,
             "long_term": long_ideas,
-            "generated_at": date.today().isoformat(),
+            "generated_at": today_iso,
             "is_weekly": True,
         }
         cache.set("weekly_trade_ideas", result)
@@ -428,12 +451,17 @@ def get_trade_ideas_history():
         history = _load_history()
         today_iso = date.today().isoformat()
         past = [i for i in history if i.get("entry_date", today_iso) != today_iso]
-        # Limit to 10 most recent to avoid yfinance rate limits / timeouts
-        result = []
-        for idea in past[:10]:
+
+        short_term, long_term = [], []
+        for idea in past[:20]:
             pnl_data = _calculate_pnl(idea)
-            result.append({**idea, **pnl_data})
-        response = {"ideas": result}
+            enriched = {**idea, **pnl_data}
+            if idea.get("idea_type") == "long_term":
+                long_term.append(enriched)
+            else:
+                short_term.append(enriched)  # default unknown ideas to short_term
+
+        response = {"short_term": short_term, "long_term": long_term}
         cache.set("trade_ideas_history", response)
         return response
     except Exception as e:
@@ -496,7 +524,7 @@ def backtest_assets(
             continue
         try:
             data = yf.download(ticker, period=yf_period, auto_adjust=True, progress=False)
-            closes = data["Close"].dropna()
+            closes = data["Close"].squeeze().dropna()
             if len(closes) < 2:
                 continue
 
