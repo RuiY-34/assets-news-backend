@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import json
 import os
 import numpy as np
+import pandas as pd
 import yfinance as yf
 from cache import cache
 from services.cross_asset import get_cross_asset_moves, get_regime_signal
@@ -442,6 +443,84 @@ def get_weekly_trade_ideas():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _batch_pnl(ideas: list) -> list:
+    """
+    Calculate P&L for all ideas in one batched yfinance download
+    instead of one download per asset (which times out on Railway).
+    """
+    if not ideas:
+        return []
+
+    # Collect all unique tickers and earliest start date
+    ticker_to_names: dict[str, list[str]] = {}  # ticker -> [asset name, ...]
+    min_date = date.today().isoformat()
+    for idea in ideas:
+        for name in idea.get("assets", []):
+            ticker = resolve_ticker(name)
+            if ticker:
+                ticker_to_names.setdefault(ticker, [])
+                if name not in ticker_to_names[ticker]:
+                    ticker_to_names[ticker].append(name)
+        entry = idea.get("entry_date", min_date)
+        if entry < min_date:
+            min_date = entry
+
+    if not ticker_to_names:
+        return [{**i, "pnl": []} for i in ideas]
+
+    # Single batch download for all tickers
+    try:
+        all_tickers = list(ticker_to_names.keys())
+        data = yf.download(all_tickers, start=min_date, auto_adjust=True, progress=False)
+        closes_all = data["Close"]  # DataFrame: rows=dates, cols=tickers
+    except Exception:
+        return [{**i, "pnl": []} for i in ideas]
+
+    # Build latest-price lookup: ticker -> Series of closes
+    def get_series(ticker: str):
+        try:
+            if isinstance(closes_all.columns, pd.MultiIndex):
+                return closes_all[ticker].dropna()
+            return closes_all[ticker].dropna() if ticker in closes_all.columns else None
+        except Exception:
+            return None
+
+    enriched = []
+    for idea in ideas:
+        entry_date = idea.get("entry_date", "")
+        entry_prices = idea.get("entry_prices", {})
+        pnl = []
+        for name in idea.get("assets", []):
+            ticker = resolve_ticker(name)
+            entry_price = entry_prices.get(name)
+            if not ticker or not entry_price:
+                continue
+            series = get_series(ticker)
+            if series is None or len(series) == 0:
+                continue
+            try:
+                # Slice from this idea's entry date
+                idea_series = series[series.index >= entry_date]
+                if len(idea_series) < 1:
+                    idea_series = series
+                current_price = float(idea_series.iloc[-1])
+                pct_return = (current_price - entry_price) / entry_price * 100
+                pnl.append({
+                    "name": name,
+                    "ticker": ticker,
+                    "entry_price": round(entry_price, 4),
+                    "current_price": round(current_price, 4),
+                    "pct_return": round(pct_return, 2),
+                    "dollar_pnl": round((pct_return / 100) * POSITION_SIZE, 2),
+                    "days_held": len(idea_series),
+                    "position_size": POSITION_SIZE,
+                })
+            except Exception:
+                continue
+        enriched.append({**idea, "pnl": pnl})
+    return enriched
+
+
 @router.get("/trade-ideas/history")
 def get_trade_ideas_history():
     cached = cache.get("trade_ideas_history")
@@ -450,16 +529,12 @@ def get_trade_ideas_history():
     try:
         history = _load_history()
         today_iso = date.today().isoformat()
-        past = [i for i in history if i.get("entry_date", today_iso) != today_iso]
+        past = [i for i in history if i.get("entry_date", today_iso) != today_iso][:20]
 
-        short_term, long_term = [], []
-        for idea in past[:20]:
-            pnl_data = _calculate_pnl(idea)
-            enriched = {**idea, **pnl_data}
-            if idea.get("idea_type") == "long_term":
-                long_term.append(enriched)
-            else:
-                short_term.append(enriched)  # default unknown ideas to short_term
+        enriched = _batch_pnl(past)
+
+        short_term = [i for i in enriched if i.get("idea_type") != "long_term"]
+        long_term  = [i for i in enriched if i.get("idea_type") == "long_term"]
 
         response = {"short_term": short_term, "long_term": long_term}
         cache.set("trade_ideas_history", response)
