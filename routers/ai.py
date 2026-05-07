@@ -186,9 +186,13 @@ def _build_market_context() -> str:
 
 @router.post("/chat")
 def chat(req: ChatRequest):
-    market_context = _build_market_context()
+    # Cache market context for 30 min — avoids slow live fetches on every message
+    market_context = cache.get("chat_market_context")
+    if not market_context:
+        market_context = _build_market_context()
+        cache.set("chat_market_context", market_context)
     system_with_context = SYSTEM_PROMPT + "\n\n" + market_context
-    reply = ask_ai(system_with_context, req.message, timeout=90, json_mode=False)
+    reply = ask_ai(system_with_context, req.message, timeout=60, json_mode=False)
     return {"reply": reply}
 
 
