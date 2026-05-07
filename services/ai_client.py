@@ -23,10 +23,11 @@ def _get_client() -> Groq:
     return _client
 
 
-def ask_ai(system_prompt: str, user_content: str, timeout: int = 60) -> str:
+def ask_ai(system_prompt: str, user_content: str, timeout: int = 60, json_mode: bool = True) -> str:
     """
-    Send a prompt to Groq and return the raw text response.
-    Strips markdown code fences and extracts the first JSON block.
+    Send a prompt to Groq and return the response.
+    When json_mode=True (default), strips markdown fences and extracts/repairs JSON.
+    When json_mode=False, returns the raw text response as-is (for chat).
     """
     client = _get_client()
     completion = client.chat.completions.create(
@@ -39,6 +40,9 @@ def ask_ai(system_prompt: str, user_content: str, timeout: int = 60) -> str:
         timeout=timeout,
     )
     raw = completion.choices[0].message.content.strip()
+
+    if not json_mode:
+        return raw
 
     # Strip markdown code fences
     if "```" in raw:

@@ -188,7 +188,7 @@ def _build_market_context() -> str:
 def chat(req: ChatRequest):
     market_context = _build_market_context()
     system_with_context = SYSTEM_PROMPT + "\n\n" + market_context
-    reply = ask_ai(system_with_context, req.message, timeout=90)
+    reply = ask_ai(system_with_context, req.message, timeout=90, json_mode=False)
     return {"reply": reply}
 
 
@@ -415,16 +415,21 @@ def get_weekly_trade_ideas():
 
 @router.get("/trade-ideas/history")
 def get_trade_ideas_history():
+    cached = cache.get("trade_ideas_history")
+    if cached:
+        return cached
     try:
         history = _load_history()
         today_iso = date.today().isoformat()
+        past = [i for i in history if i.get("entry_date", today_iso) != today_iso]
+        # Limit to 10 most recent to avoid yfinance rate limits / timeouts
         result = []
-        for idea in history:
-            if idea.get("entry_date", today_iso) == today_iso:
-                continue  # skip today's — they're "new"
+        for idea in past[:10]:
             pnl_data = _calculate_pnl(idea)
             result.append({**idea, **pnl_data})
-        return {"ideas": result}
+        response = {"ideas": result}
+        cache.set("trade_ideas_history", response)
+        return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
